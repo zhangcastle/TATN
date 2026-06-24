@@ -12,8 +12,28 @@ INR_data_path = './normalized_data/INR/'
 LG_data_path = './normalized_data/LG/'
 pseudo_train_set = []
 pseudo_test_set = []
-Pan_train_set = []
-Pan_test_set = []
+Pan_train_set = [
+  'Cycle_1_train.mat',
+  'Cycle_2_train.mat',
+  'Cycle_3_train.mat',
+  'Cycle_4_train.mat',
+  'NN_train.mat',
+  'US06_train.mat',
+  'HWFET_train.mat',
+  'LA92_train.mat',
+  'UDDS_train.mat'
+]
+Pan_test_set = [
+  'Cycle_1_test.mat',
+  'Cycle_2_test.mat',
+  'Cycle_3_test.mat',
+  'Cycle_4_test.mat',
+  'NN_test.mat',
+  'US06_test.mat',
+  'HWFET_test.mat',
+  'LA92_test.mat',
+  'UDDS_test.mat'
+]
 LG_train_set = []
 LG_test_set = []
 
