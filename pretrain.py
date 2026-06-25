@@ -45,7 +45,7 @@ def pretrain(rundir,source_temp,target_temp,source_data_path,source_train_set,so
       min_max.append(1)
     #checkpoint = torch.load(load_model_path, map_location=device)
      #models['domain_classifier'].load_state_dict(checkpoint['domain_classifier'])
-    for epoch in range(epochs+500):
+    for epoch in range(epochs):
       ##########
       #train
       ##########
@@ -81,8 +81,8 @@ def pretrain(rundir,source_temp,target_temp,source_data_path,source_train_set,so
       if (loss_train < loss_min) & (ifsave==True):
         loss_min = loss_train
         path = rundir+'/saved_model/best.pt'
-        #save_model(models, optimizers, loss_min, seed,path)
-        #print('min loss:{} saved model'.format(loss_min))
+        save_model(models, optimizers, loss_min, seed,path)
+        print('min loss:{} saved model'.format(loss_min))
       ##########
       #test
       ##########
@@ -111,7 +111,7 @@ def pretrain(rundir,source_temp,target_temp,source_data_path,source_train_set,so
         loss_mae = criterion_mae(y_predict, y_test).detach().cpu().item()
         loss_rmse = math.sqrt(loss_mse.detach().cpu().item())
         loss_max = MAXLoss(y_predict, y_test)
-        if epoch > epochs:  
+        if epoch >= 0:  
           min_avg = (min_mae[i] + min_rmse[i])/2
           loss_avg = (loss_mae + loss_rmse) / 2
           if min_avg > loss_avg:

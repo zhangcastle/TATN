@@ -1,5 +1,7 @@
 import copy
 from datetime import datetime
+import matplotlib
+matplotlib.use('Agg')  # non-interactive backend: saves figures to file without plt.show() blocking
 import matplotlib.pyplot as plt
 import numpy as np
 import torch

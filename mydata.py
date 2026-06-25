@@ -61,7 +61,7 @@ class Mydataset(Dataset):
       self.X,self.Y = np.concatenate(self.X,axis=0),np.concatenate(self.Y,axis=0)
       #print('shape:{},{}'.format(self.X.shape,self.Y.shape))
 
-      new_plot_data(self.X, self.Y)
+      # new_plot_data(self.X, self.Y)  # disabled: causes blocking plots in non-interactive envs
     
       self.X = np.reshape(self.X, (self.X.shape[0]//steps, feature_num, steps))
       self.Y = np.reshape(self.Y, (self.Y.shape[0]//steps, steps))
