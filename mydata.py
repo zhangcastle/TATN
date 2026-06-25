@@ -42,6 +42,20 @@ test_name = ['US06', 'HWFET', 'LA92', 'UDDS']
 temp = ['25', '10', '0', 'n10', 'n20']
 source_temp = ['25', '10', '0', 'n10', 'n20']
 target_temp=['25', '10', '0', 'n10', 'n20']
+
+# All 9 complete drive cycle files (no train/test temporal split)
+# Used for leave-one-out evaluation as described in the paper
+Pan_all_set = [
+    'Cycle_1.mat',
+    'Cycle_2.mat',
+    'Cycle_3.mat',
+    'Cycle_4.mat',
+    'NN.mat',
+    'US06.mat',
+    'HWFET.mat',
+    'LA92.mat',
+    'UDDS.mat',
+]
 class Mydataset(Dataset):
   def __init__(self, data_path,temp, set, mode='train'):
     self.X, self.Y = [], []
