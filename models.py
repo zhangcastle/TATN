@@ -144,11 +144,11 @@ def save_model(models, optimizers, loss_min, seed, model_path='./saved_model/bes
         }, model_path )
 
 def load_saved_model(device,models,optimizers,loss_min,seed,model_path='./saved_model/best.pt'):
-    device = torch.device('cuda')
     ckpt = torch.load(model_path,map_location=device)
     layers=['conv','lstm','fc','regression']
     for l in layers:
-        models[l+'_s'].load_state_dict(ckpt[l])
+        if l+'_s' in models:
+            models[l+'_s'].load_state_dict(ckpt[l])
         models[l].load_state_dict(ckpt[l])
         #optimizers[l].load_state_dict(ckpt['optimizer_'+l])
     loss_min = ckpt['loss_min']

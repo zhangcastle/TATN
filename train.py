@@ -106,8 +106,6 @@ def train(rundir,source_temp,target_temp,source_data_path,source_train_set,sourc
         domain_loss.backward()
         optimizers['discriminator'].step()
         
-        print(target_domain_pred.detach().cpu().numpy()[0])
-        print(source_domain_pred.detach().cpu().numpy()[0])
         total_hit += torch.sum(torch.round(source_domain_pred) == S_labels).item()
         total_hit += torch.sum(torch.round(target_domain_pred) == T_labels).item()
         total_num += source_data.shape[0]
@@ -309,3 +307,4 @@ def train(rundir,source_temp,target_temp,source_data_path,source_train_set,sourc
     plot_train_loss(rundir,loss_iter_domain, loss_iter_predictor, loss_iter_domain_acc, epochs)
     plot_test_loss(rundir,loss_iter_mae, loss_iter_rmse, loss_iter_max, epochs)
     print(min_mae,min_rmse,min_max)
+    return min_mae, min_rmse, min_max
