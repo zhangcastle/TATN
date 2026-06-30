@@ -14,22 +14,22 @@ import scipy.io as sio
 import argparse
 
 #use pre-trained source model to generate pseudo labels for unlabelled target data
-def main(temp,model,file):
+def main(temp, model_path, file):
     print('temp:',temp)
+    # Bug fix 1: removed `device = torch.device('cpu')` that was overriding GPU detection
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    device = torch.device('cpu')
     models = {}
     models['conv'] = conv()
     models['lstm'] = lstm()
     models['fc'] = fc()
     models['regression'] = regression()
-    for model in models:
-        models[model].to(device)
-        models[model].eval()
-    load_model_path = model
-    ckpt = torch.load(load_model_path, map_location=device)
-    model = ['conv','lstm','fc','regression']
-    for m in model:
+    # Bug fix 2: renamed loop variable from `model` to `k` to avoid overwriting parameter `model_path`
+    for k in models:
+        models[k].to(device)
+        models[k].eval()
+    # Bug fix 3: now correctly uses the parameter, not the loop variable
+    ckpt = torch.load(model_path, map_location=device)
+    for m in ['conv','lstm','fc','regression']:
         models[m].load_state_dict(ckpt[m])
     seed = ckpt['seed']
     print('load model')
@@ -133,14 +133,21 @@ def main(temp,model,file):
         plt.legend()
         plt.savefig(fig_split)
         plt.close()
-        path = './your fold' + temp + '/' + temp + 'degC_' + file + '_PF.mat'
-        mat = sio.loadmat(path)
-        time,current,voltage,battery_temp,ah = mat['time'][sorted(split_set)],mat['current'][sorted(split_set)],mat['voltage'][sorted(split_set)],mat['temp'][sorted(split_set)],mat['ah']
-        file = './your fold' + temp + '/' + temp + 'degC_' + file + '_pseudo*_' + str(i+1) + '_PF.mat'
-        ah = y_predict_split
-        ah = ah.reshape(-1,1)
-        sio.savemat(file,{'time':time,'current':current,'voltage':voltage,'temp':battery_temp,'ah':ah})
-        print(time.shape,y_predict_split.shape)
+        # Bug fix 4: './your fold' was a placeholder path that never existed;
+        # file name contained '*' which is illegal on all OS.
+        # Now reads from our normalized data dir, saves to ./pseudo_labels/,
+        # and uses 'ah' field only (no 'time' in our normalized format).
+        orig_path = data_path + temp + '/' + temp + file
+        mat = sio.loadmat(orig_path)
+        current = mat['current'][sorted(split_set)]
+        voltage = mat['voltage'][sorted(split_set)]
+        battery_temp = mat['temp'][sorted(split_set)]
+        ah = y_predict_split.reshape(-1, 1)
+        save_dir = './pseudo_labels/' + temp + '/'
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = save_dir + temp + file.replace('.mat', '') + '_pseudo_' + str(i+1) + '.mat'
+        sio.savemat(save_path, {'current': current, 'voltage': voltage, 'temp': battery_temp, 'ah': ah})
+        print('saved:', save_path, y_predict_split.shape)
     #draw figures
     
 
@@ -190,4 +197,4 @@ if __name__ == '__main__':
     parser.add_argument('--model',type=str,default='models/pre-n10.pt')
     parser.add_argument('--file',type=str,default='your file')
     args = parser.parse_args()
-    main(args.temp,args.model,args.file)
+    main(args.temp, args.model, args.file)
