@@ -96,7 +96,8 @@ def train(rundir,source_temp,target_temp,source_data_path,source_train_set,sourc
         for op in optimizers:
           optimizers[op].zero_grad()
         #train domain discriminator
-        source_features = models['lstm'](models['conv_s'](source_data))
+        # fix: use lstm_s (frozen source LSTM) for source path to prevent catastrophic forgetting
+        source_features = models['lstm_s'](models['conv_s'](source_data))
         target_features = models['lstm'](models['conv'](target_data))
         source_domain_pred = models['discriminator'](source_features.detach())
         target_domain_pred = models['discriminator'](target_features.detach())
@@ -116,9 +117,10 @@ def train(rundir,source_temp,target_temp,source_data_path,source_train_set,sourc
         target_domain_pred = models['discriminator'](models['lstm'](models['conv'](target_data)))
         target_domain_loss = domain_criterion(target_domain_pred,T_labels)
         
+        # fix: use conv_s + lstm_s for source MMD features (same as discriminator source path)
         source_logits = (models['fc']\
-                              (models['lstm']\
-                                (models['conv'](source_data))))
+                              (models['lstm_s']\
+                                (models['conv_s'](source_data))))
 
         target_logits = models['lstm']\
                                 (models['conv'](target_data))

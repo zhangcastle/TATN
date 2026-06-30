@@ -12,9 +12,30 @@ import numpy as np
 import math
 import scipy.io as sio
 import argparse
+import os
 
 #use pre-trained source model to generate pseudo labels for unlabelled target data
-def main(temp, model_path, file):
+def main(temp, model_path, file, save_dir='./pseudo_labels', data_path=None,
+         enable_fallback=False):
+    """
+    Generate pseudo labels for one unlabelled target cycle.
+
+    Args:
+        temp:            target temperature key (e.g. '25', 'n10')
+        model_path:      path to pretrained source .pt file
+        file:            cycle filename (e.g. 'Cycle_1.mat')
+        save_dir:        root dir for saving pseudo-labelled files
+                         (saved to save_dir/{temp}/{temp}<name>_pseudo_N.mat)
+        data_path:       root of normalised data; defaults to Pan_data_path
+        enable_fallback: if True, save idx_set-filtered data when no monotone
+                         segments are found. Default False for strict reproduction
+                         (disabled fallback preserves TATN pseudo-label selection
+                         strategy; enable only for debugging / ablation studies).
+
+    Returns:
+        list of saved filenames (relative, for Mydataset file list);
+        empty list if no valid segments found and enable_fallback=False.
+    """
     print('temp:',temp)
     # Bug fix 1: removed `device = torch.device('cpu')` that was overriding GPU detection
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -39,8 +60,9 @@ def main(temp, model_path, file):
     criterion_mae = nn.L1Loss()
     criterion_mse = nn.MSELoss()
     
-    data_path = Pan_data_path
-    
+    if data_path is None:
+        data_path = Pan_data_path
+
     test_set = []
     test_set.append(file)
     print(test_set)
@@ -118,10 +140,15 @@ def main(temp, model_path, file):
                 split_set.add(k)
         sets_list.append(split_set)
     
-    fig_cut = 'fig_' + temp + file + '_pseudo*_cut.jpg'
-    fig = 'fig_' + temp + file + '_pseudo*.jpg'
+    # fixed: removed '*' from figure names (illegal filename character)
+    fig_cut = 'fig_' + temp + file.replace('.mat','') + '_pseudo_cut.jpg'
+    fig     = 'fig_' + temp + file.replace('.mat','') + '_pseudo.jpg'
+    out_subdir = os.path.join(save_dir, temp)
+    os.makedirs(out_subdir, exist_ok=True)
+    saved_files = []
+
     for i,split_set in enumerate(sets_list):
-        fig_split = 'fig_' + temp + file + '_pseudo*_split_' + str(i+1) + '.jpg'
+        fig_split = 'fig_' + temp + file.replace('.mat','') + '_pseudo_split_' + str(i+1) + '.jpg'
         plt.figure()
         y_predict_split = y_predict[sorted(split_set)]
         y_test_split = y_test[sorted(split_set)]
@@ -133,21 +160,45 @@ def main(temp, model_path, file):
         plt.legend()
         plt.savefig(fig_split)
         plt.close()
-        # Bug fix 4: './your fold' was a placeholder path that never existed;
-        # file name contained '*' which is illegal on all OS.
-        # Now reads from our normalized data dir, saves to ./pseudo_labels/,
-        # and uses 'ah' field only (no 'time' in our normalized format).
+        # Bug fix 4: './your fold' was a placeholder; file name had illegal '*'.
+        # Now reads from normalised data dir (data_path param), saves to save_dir param.
         orig_path = data_path + temp + '/' + temp + file
         mat = sio.loadmat(orig_path)
         current = mat['current'][sorted(split_set)]
         voltage = mat['voltage'][sorted(split_set)]
         battery_temp = mat['temp'][sorted(split_set)]
         ah = y_predict_split.reshape(-1, 1)
-        save_dir = './pseudo_labels/' + temp + '/'
-        os.makedirs(save_dir, exist_ok=True)
-        save_path = save_dir + temp + file.replace('.mat', '') + '_pseudo_' + str(i+1) + '.mat'
+        fname = temp + file.replace('.mat', '') + '_pseudo_' + str(i+1) + '.mat'
+        save_path = os.path.join(out_subdir, fname)
         sio.savemat(save_path, {'current': current, 'voltage': voltage, 'temp': battery_temp, 'ah': ah})
         print('saved:', save_path, y_predict_split.shape)
+        saved_files.append(file.replace('.mat', '') + '_pseudo_' + str(i+1) + '.mat')
+
+    # If no valid monotone segments found:
+    #   enable_fallback=False (default, strict reproduction): skip this cycle, return [].
+    #   enable_fallback=True  (debug/ablation only):          save idx_set-filtered data.
+    # NOTE: fallback is DISABLED for formal Table IV/V reproduction to preserve
+    # TATN's pseudo-label selection strategy. Enabling it relaxes the selection
+    # criteria and should be reported separately.
+    if not saved_files:
+        if enable_fallback:
+            print('no segments found, falling back to stability-filtered idx_set (enable_fallback=True)')
+            orig_path = data_path + temp + '/' + temp + file
+            mat = sio.loadmat(orig_path)
+            idx_sorted = sorted(idx_set)
+            current = mat['current'][idx_sorted]
+            voltage = mat['voltage'][idx_sorted]
+            battery_temp = mat['temp'][idx_sorted]
+            ah = y_predict[idx_sorted].reshape(-1, 1)
+            fname = temp + file.replace('.mat', '') + '_pseudo_0.mat'
+            save_path = os.path.join(out_subdir, fname)
+            sio.savemat(save_path, {'current': current, 'voltage': voltage, 'temp': battery_temp, 'ah': ah})
+            print('saved (fallback):', save_path)
+            saved_files.append(file.replace('.mat', '') + '_pseudo_0.mat')
+        else:
+            print(f'WARNING: no valid segments for {file} (sets_list empty). Skipping pseudo-label. '
+                  f'Pass enable_fallback=True to force-save idx_set data for debugging.')
+
     #draw figures
     
 
@@ -187,9 +238,9 @@ def main(temp, model_path, file):
     error = 'mae = ' + str(loss_mae) + ' rmse = ' + str(loss_rmse) +  ' max = ' + str(loss_max)
     print(data_path,test_set[0])
     print(error)
-    
-        
-        
+
+    return saved_files
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='generate pseudo label')
