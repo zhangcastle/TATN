@@ -202,7 +202,10 @@ def plot_test_loss(rundir,loss_mae, loss_rmse, loss_max, epoch):
   plt.close()
 
 def MAXLoss(y_predict, y_label):
-  return (torch.max(torch.abs(y_predict - y_label))).item()
+  diff = torch.abs(y_predict - y_label)
+  if diff.numel() == 0:
+    return 0.0
+  return torch.max(diff).item()
 
 def mkdir(dir):
   if dir == None:
