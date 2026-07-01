@@ -110,37 +110,69 @@ def main(temp, model_path, file, save_dir='./pseudo_labels', data_path=None,
             for j in range(front_idx,back_idx):
                 idx_set.discard(j)
 
-    y_predict_cut = y_predict[list(idx_set)]
-    y_test_cut = y_test[list(idx_set)]
-    y_diff_cut= y_diff[list(idx_set)]
+    idx_list = sorted(idx_set)
+
+    if len(idx_list) == 0:
+        print(f"WARNING: skip {file}: no indices left after pseudo-label filtering.")
+        return []
+
+    y_predict_cut = y_predict[idx_list]
+    y_test_cut = y_test[idx_list]
+    y_diff_cut = y_diff[idx_list]
     y_diff2 = -(np.diff(y_predict_cut))
     pairs = []
     sets_list = []
-    idx_list = list(idx_set)
+
     split_point = []
     split_point.append(0)
-    for i,e in enumerate(y_diff2):
+
+    for i, e in enumerate(y_diff2):
         if abs(y_diff2[i]) > 0.08:
             split_point.append(i)
-            print(i,idx_list[i],y_diff2[i])
-    for i,e in enumerate(split_point):
-        
+            print(i, idx_list[i], y_diff2[i])
+
+    for i, e in enumerate(split_point):
+
         if i == (len(split_point)-1):
-            beg,end = min(split_point[i]+2,len(idx_list)-2),len(idx_list)-2
+            beg, end = min(split_point[i]+2, len(idx_list)-2), len(idx_list)-2
         else:
-            beg,end = split_point[i]+2,split_point[i+1]-2
+            beg, end = split_point[i]+2, split_point[i+1]-2
             if y_diff2[split_point[i+1]] < 0:
                 continue
-        
-        # guard: skip segment if indices are out of range (original code has no bounds check)
-        if beg < 0 or end < 0 or beg >= len(idx_list) or end >= len(idx_list) or beg > end:
+
+        if beg < 0 or end < 0 or beg >= len(idx_list) or end >= len(idx_list) or beg >= end:
+            print(
+                f"WARNING: skip invalid pseudo segment in {file}: "
+                f"beg={beg}, end={end}, len(idx_list)={len(idx_list)}"
+            )
             continue
-        pairs.append((beg,end))
+
+        start_idx = idx_list[beg]
+        end_idx = idx_list[end]
+
+        if end_idx <= start_idx:
+            print(
+                f"WARNING: skip invalid pseudo segment in {file}: "
+                f"start_idx={start_idx}, end_idx={end_idx}"
+            )
+            continue
+
         split_set = set()
-        print(idx_list[beg],idx_list[end])
-        for k in range(idx_list[beg],idx_list[end]):
+        print(start_idx, end_idx)
+
+        for k in range(start_idx, end_idx):
             if k in idx_set:
                 split_set.add(k)
+
+        min_segment_len = 90
+        if len(split_set) < min_segment_len:
+            print(
+                f"WARNING: skip short pseudo segment in {file}: "
+                f"only {len(split_set)} samples < {min_segment_len}"
+            )
+            continue
+
+        pairs.append((beg, end))
         sets_list.append(split_set)
     
     # fixed: removed '*' from figure names (illegal filename character)
