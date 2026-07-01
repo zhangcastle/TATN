@@ -132,6 +132,9 @@ def main(temp, model_path, file, save_dir='./pseudo_labels', data_path=None,
             if y_diff2[split_point[i+1]] < 0:
                 continue
         
+        # guard: skip segment if indices are out of range (original code has no bounds check)
+        if beg < 0 or end < 0 or beg >= len(idx_list) or end >= len(idx_list) or beg > end:
+            continue
         pairs.append((beg,end))
         split_set = set()
         print(idx_list[beg],idx_list[end])
