@@ -16,7 +16,7 @@ import os
 
 #use pre-trained source model to generate pseudo labels for unlabelled target data
 def main(temp, model_path, file, save_dir='./pseudo_labels', data_path=None,
-         enable_fallback=False):
+         enable_fallback=False, pseudo_thresh=0.08, pseudo_window=200, min_segment_len=90):
     """
     Generate pseudo labels for one unlabelled target cycle.
 
@@ -87,7 +87,7 @@ def main(temp, model_path, file, save_dir='./pseudo_labels', data_path=None,
     
     y_diff = []
     
-    x = 200
+    x = pseudo_window
     for i in range(len(y_predict)):
         if (i+x) > len(y_predict)-1:
             break
@@ -99,7 +99,7 @@ def main(temp, model_path, file, save_dir='./pseudo_labels', data_path=None,
     y_diff = np.asarray(y_diff)
     idx_set = set(list(range(len(y_diff))))
     
-    thresh = 0.08
+    thresh = pseudo_thresh
 
     for i,e in enumerate(y_diff):
         if e > thresh:
@@ -279,8 +279,23 @@ def main(temp, model_path, file, save_dir='./pseudo_labels', data_path=None,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='generate pseudo label')
-    parser.add_argument('--temp',type=str,default='n20')
-    parser.add_argument('--model',type=str,default='models/pre-n10.pt')
-    parser.add_argument('--file',type=str,default='your file')
+    parser.add_argument('--temp',   type=str,   default='n20')
+    parser.add_argument('--model',  type=str,   default='models/pre-n10.pt')
+    parser.add_argument('--file',   type=str,   default='your file')
+    parser.add_argument('--save_dir', type=str, default='./pseudo_labels')
+    parser.add_argument('--data_path', type=str, default=None)
+    parser.add_argument('--pseudo_thresh',   type=float, default=0.08,
+                        help='Stability filter threshold (default: 0.08)')
+    parser.add_argument('--pseudo_window',   type=int,   default=200,
+                        help='Lookahead window for stability score (default: 200)')
+    parser.add_argument('--min_segment_len', type=int,   default=90,
+                        help='Minimum samples per pseudo segment (default: 90)')
+    parser.add_argument('--enable_fallback', action='store_true',
+                        help='If set, save idx_set-filtered data when no segments found (debug only)')
     args = parser.parse_args()
-    main(args.temp, args.model, args.file)
+    main(args.temp, args.model, args.file,
+         save_dir=args.save_dir, data_path=args.data_path,
+         enable_fallback=args.enable_fallback,
+         pseudo_thresh=args.pseudo_thresh,
+         pseudo_window=args.pseudo_window,
+         min_segment_len=args.min_segment_len)

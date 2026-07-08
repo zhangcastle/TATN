@@ -17,6 +17,18 @@ batch_size = 6
 decay_iter = 50
 decay_lamb = 1
 
+
+def freeze_module(module):
+    """Disable gradient computation for all parameters of a module."""
+    for p in module.parameters():
+        p.requires_grad_(False)
+
+
+def unfreeze_module(module):
+    """Enable gradient computation for all parameters of a module."""
+    for p in module.parameters():
+        p.requires_grad_(True)
+
 def train(rundir,source_temp,target_temp,source_data_path,source_train_set,source_test_set,target_data_path,target_train_set,target_test_set,models, criterion, optimizers, batch_size, epochs,eval_interval, lamb1,lamb2,lamb3,seed=0, device_type=('cuda:0' if torch.cuda.is_available() else 'cpu'), ifsave=True, load_model=False, model_path='/models/best.pt'):
   loss_min = 10000
   rundir = mkdir(rundir)
@@ -32,6 +44,22 @@ def train(rundir,source_temp,target_temp,source_data_path,source_train_set,sourc
   criterion_mae = nn.L1Loss()
   criterion_mse = nn.MSELoss()
   domain_criterion = nn.BCELoss()
+
+  # --- Explicit freeze/unfreeze per TATN paper design ---
+  # Source branch: always frozen (pretrained weights, never updated during transfer)
+  for key in ['conv_s', 'lstm_s', 'fc_s', 'regression_s']:
+      if key in models:
+          freeze_module(models[key])
+  # Target predictor: frozen (retains pretrained SOC prediction head)
+  freeze_module(models['fc'])
+  freeze_module(models['regression'])
+  # Target feature extractor + domain discriminator: trainable
+  unfreeze_module(models['conv'])
+  unfreeze_module(models['lstm'])
+  unfreeze_module(models['discriminator'])
+  print(f'[Transfer] Frozen  : source branch (conv_s/lstm_s/fc_s/regression_s) + target fc/regression')
+  print(f'[Transfer] Trainable: target conv/lstm + discriminator')
+  print(f'[Transfer] λ1={lamb1}  λ2={lamb2}  λ3={lamb3}')
   for temp_idx in range(1):
     source_data = Mydataset(source_data_path, source_temp, source_train_set,mode='train')
     source_loader = DataLoader(source_data, batch_size=batch_size, shuffle=True)
@@ -73,6 +101,7 @@ def train(rundir,source_temp,target_temp,source_data_path,source_train_set,sourc
       loss_train = 0
       loss_domain = 0
       loss_target_domain = 0
+      loss_mmd = 0
       loss_test = 0
       total_num = 0
       total_hit = 0
@@ -112,24 +141,23 @@ def train(rundir,source_temp,target_temp,source_data_path,source_train_set,sourc
         total_num += source_data.shape[0]
         total_num += target_data.shape[0]
         #torch.cuda.empty_cache()
-        #train extractor
+        #train extractor: target feature extractor + domain discriminator
         T_labels = torch.ones([target_data.shape[0],1]).to(device)
-        target_domain_pred = models['discriminator'](models['lstm'](models['conv'](target_data)))
-        target_domain_loss = domain_criterion(target_domain_pred,T_labels)
-        
-        # fix: use conv_s + lstm_s for source MMD features (same as discriminator source path)
-        source_logits = (models['fc']\
-                              (models['lstm_s']\
-                                (models['conv_s'](source_data))))
-
-        target_logits = models['lstm']\
-                                (models['conv'](target_data))
-        predict_target = models['regression'](models['fc'](target_logits)).squeeze()
-        target_loss = criterion(predict_target,target_label)
+        # compute features from respective branches (source=frozen, target=trainable)
+        source_feat = models['lstm_s'](models['conv_s'](source_data))
+        target_feat  = models['lstm'](models['conv'](target_data))
+        # adversarial loss: fool discriminator into classifying target as source
+        target_domain_pred = models['discriminator'](target_feat)
+        target_domain_loss = domain_criterion(target_domain_pred, T_labels)
+        # SOC prediction on pseudo-labeled target data (fc + regression are frozen)
+        predict_target = models['regression'](models['fc'](target_feat)).squeeze()
+        target_loss = criterion(predict_target, target_label)
+        # MMD on same-level features: both at lstm output (not mixing fc layer on source)
         mmd_loss = 0
         if lamb3 != 0:
-          mmd_loss = mmd(torch.reshape(target_logits,(target_logits.shape[0],-1)),torch.reshape(source_logits,(source_logits.shape[0],-1)))
-        loss = lamb1*target_loss + lamb2 * (target_domain_loss)  + lamb3 * mmd_loss
+            mmd_loss = mmd(torch.reshape(target_feat, (target_feat.shape[0], -1)),
+                           torch.reshape(source_feat, (source_feat.shape[0], -1)))
+        loss = lamb1 * target_loss + lamb2 * target_domain_loss + lamb3 * mmd_loss
         loss.backward()
         optimizers['conv'].step()
         optimizers['lstm'].step()
@@ -138,14 +166,20 @@ def train(rundir,source_temp,target_temp,source_data_path,source_train_set,sourc
         loss_train += target_loss.item()
         loss_domain += domain_loss.item()
         loss_target_domain += target_domain_loss.item()
+        mmd_val = mmd_loss.item() if isinstance(mmd_loss, torch.Tensor) else float(mmd_loss)
+        loss_mmd += mmd_val
         #if ((epoch+1) % eval_interval) == 0:
           #plot_result(source_label, predict_label, save_image='train', 
                   #test_name=source_data_path[7:-1] + temp[temp_idx] + '_epoch_' + str(epoch))
-      loss_train = loss_train/(source_sample)
-      loss_domain = loss_domain/(target_sample)
-      acc = (float)(total_hit)/total_num
-  
-      print('epoch {}:loss {} target_domain_loss {}domain_loss {} domain_acc {} {}/{}'.format(epoch, loss_train,loss_target_domain,loss_domain,acc,total_hit,total_num))
+      loss_train  = loss_train  / max(source_sample, 1)
+      loss_domain = loss_domain / max(target_sample, 1)
+      loss_target_domain = loss_target_domain / max(target_sample, 1)
+      loss_mmd    = loss_mmd    / max(target_sample, 1)
+      acc = float(total_hit) / max(total_num, 1)
+
+      print('epoch {}: pred={:.6f} adv={:.4f} disc={:.4f} mmd={:.6f} acc={:.4f} [{}/{}] λ=({},{},{})'.format(
+          epoch, loss_train, loss_target_domain, loss_domain, loss_mmd,
+          acc, total_hit, total_num, lamb1, lamb2, lamb3))
       if (loss_train < loss_min) & (ifsave==True):
         loss_min = loss_train
         path = rundir + '/saved_model/best.pt'
