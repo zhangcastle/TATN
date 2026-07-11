@@ -17,7 +17,7 @@ def gaussian_kernel(a, b):
     b = b.view(1, dim1_2, depth)
     a_core = a.expand(dim1_1, dim1_2, depth)
     b_core = b.expand(dim1_1, dim1_2, depth)
-    numerator = (a_core - b_core).pow(2).mean(2)/depth
+    numerator = (a_core - b_core).pow(2).mean(2)
     return torch.exp(-numerator)
 
 def mmd(a, b):
