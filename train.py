@@ -192,31 +192,32 @@ def train(rundir,source_temp,target_temp,source_data_path,source_train_set,sourc
             lossfile = rundir + '/errors/domain_loss.txt'
             with open(lossfile,'a') as f:
               f.write('epoch ' + str(epoch) + ' ' + str(loss_target_domain) + '\n')
-            tqdm_mix = tqdm(zip(source_loader, target_loader),desc='epoch '+str(epoch))
-            data,feat,labels =[], [],[]
-            for i, ((source_data, source_label), (target_data, target_label)) in enumerate(tqdm_mix):
-              source_data = source_data.to(device)
-              target_data = target_data.to(device)
-              source_len = source_data.shape[0]
-              target_len = target_data.shape[0]
-              feat_S,feat_T = models['conv'](source_data).cpu().detach().numpy(),models['conv'](target_data).cpu().detach().numpy()
-              data.append(source_data.reshape(source_len,-1).cpu().detach().numpy())
-              data.append(target_data.reshape(target_len,-1).cpu().detach().numpy())
-              feat.append(feat_S.reshape(source_len,-1))
-              feat.append(feat_T.reshape(target_len,-1))
-              S_labels = np.zeros([source_len])
-              T_labels = np.zeros([target_len])
-              T_labels = T_labels + 5
-              labels.append(S_labels.astype(int))
-              labels.append(T_labels.astype(int))
-            print(len(feat))
-            feat = np.concatenate(feat,axis=0)
-            data = np.concatenate(data,axis=0)
-            labels = np.concatenate(labels)
-            feat_path = rundir + '/tsne/feat_epoch' + str(epoch) + '.jpg'
-            plot_tsne(feat,labels,feat_path)
-            data_path = rundir + '/tsne/data_epoch' + str(epoch) + '.jpg'
-            plot_tsne(data,labels,data_path)
+            # t-SNE disabled for full-scale runs (too slow: O(n²) per checkpoint × 10 checkpoints/fold)
+            # Uncomment the block below to re-enable for single-case analysis:
+            # tqdm_mix = tqdm(zip(source_loader, target_loader),desc='epoch '+str(epoch))
+            # data,feat,labels =[], [],[]
+            # for i, ((source_data, source_label), (target_data, target_label)) in enumerate(tqdm_mix):
+            #   source_data = source_data.to(device)
+            #   target_data = target_data.to(device)
+            #   source_len = source_data.shape[0]
+            #   target_len = target_data.shape[0]
+            #   feat_S,feat_T = models['conv'](source_data).cpu().detach().numpy(),models['conv'](target_data).cpu().detach().numpy()
+            #   data.append(source_data.reshape(source_len,-1).cpu().detach().numpy())
+            #   data.append(target_data.reshape(target_len,-1).cpu().detach().numpy())
+            #   feat.append(feat_S.reshape(source_len,-1))
+            #   feat.append(feat_T.reshape(target_len,-1))
+            #   S_labels = np.zeros([source_len])
+            #   T_labels = np.zeros([target_len])
+            #   T_labels = T_labels + 5
+            #   labels.append(S_labels.astype(int))
+            #   labels.append(T_labels.astype(int))
+            # feat = np.concatenate(feat,axis=0)
+            # data = np.concatenate(data,axis=0)
+            # labels = np.concatenate(labels)
+            # feat_path = rundir + '/tsne/feat_epoch' + str(epoch) + '.jpg'
+            # plot_tsne(feat,labels,feat_path)
+            # data_path = rundir + '/tsne/data_epoch' + str(epoch) + '.jpg'
+            # plot_tsne(data,labels,data_path)
       ##########
       #test
       ##########
